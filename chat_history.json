@@ -1,0 +1,17 @@
+[
+  {
+    "id": "conv_1763302133743",
+    "messages": [
+      {
+        "role": "user",
+        "content": "你好"
+      },
+      {
+        "role": "assistant",
+        "content": "<think></think>您好！很高兴为您提供服务。请问有什么可以帮助您的吗？",
+        "reasoning": ""
+      }
+    ],
+    "timestamp": "2025-11-16T14:09:04.497Z"
+  }
+]
