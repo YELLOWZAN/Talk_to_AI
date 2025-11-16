@@ -1,0 +1,781 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>对话助手</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/github-markdown-css/github-markdown.min.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#10B981',
+                        secondary: '#6B7280',
+                        dark: '#1F2937',
+                        light: '#F9FAFB',
+                        accent: '#3B82F6',
+                    },
+                }
+            }
+        }
+    </script>
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .content-auto {
+                content-visibility: auto;
+            }
+            .sidebar-width {
+                width: 240px;
+            }
+            .chat-height {
+                height: calc(100vh - 120px);
+            }
+            .chat-area-height {
+                height: calc(100vh - 200px);
+            }
+            .scrollbar-thin {
+                scrollbar-width: thin;
+            }
+            .scrollbar-thin::-webkit-scrollbar {
+                width: 6px;
+            }
+            .scrollbar-thin::-webkit-scrollbar-track {
+                background: #f1f1f1;
+            }
+            .scrollbar-thin::-webkit-scrollbar-thumb {
+                background: #888;
+                border-radius: 3px;
+            }
+            .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+                background: #555;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-dark font-sans">
+    <div class="flex h-screen overflow-hidden">
+        <!-- 侧边栏 -->
+        <div id="sidebar" class="bg-white border-r border-gray-200 sidebar-width hidden md:block">
+            <div class="p-4 border-b border-gray-200">
+                <h2 class="text-xl font-bold text-primary">历史对话</h2>
+                <button id="new-chat-btn" class="mt-2 w-full bg-primary hover:bg-green-600 text-white py-2 px-4 rounded-md transition-colors flex items-center justify-center">
+                    <i class="fa fa-plus mr-2"></i> 新对话
+                </button>
+            </div>
+            <div id="conversation-list" class="p-2 overflow-y-auto scrollbar-thin" style="height: calc(100vh - 120px);">
+                <!-- 对话列表将在这里动态加载 -->
+            </div>
+        </div>
+
+        <!-- 主要内容区 -->
+        <div class="flex-1 flex flex-col">
+            <!-- 顶部导航栏 -->
+            <header class="bg-white border-b border-gray-200 px-4 py-3 flex justify-between items-center">
+                <button id="toggle-sidebar" class="md:hidden text-gray-500 hover:text-primary">
+                    <i class="fa fa-bars text-xl"></i>
+                </button>
+                <h1 class="text-xl font-bold text-primary">对话助手</h1>
+                <div class="flex items-center space-x-4">
+                    <button id="toggle-reasoning" class="px-3 py-1 text-sm bg-gray-200 hover:bg-gray-300 rounded-md transition-colors">
+                        <i class="fa fa-lightbulb-o mr-1"></i> 显示思考
+                    </button>
+                    <button id="settings-btn" class="text-gray-500 hover:text-primary">
+                        <i class="fa fa-cog text-xl"></i>
+                    </button>
+                </div>
+            </header>
+
+            <!-- 聊天区域 -->
+            <div id="chat-area" class="flex-1 p-4 overflow-y-auto scrollbar-thin chat-area-height bg-gray-50">
+                <div class="max-w-3xl mx-auto space-y-6">
+                    <!-- 系统消息 -->
+                    <div class="bg-blue-50 p-4 rounded-lg">
+                        <p class="text-blue-800">欢迎使用对话助手！</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 输入区域 -->
+            <div class="p-4 bg-white border-t border-gray-200">
+                <div class="max-w-3xl mx-auto relative">
+                    <textarea id="message-input" rows="3" placeholder="请输入您的问题..." 
+                        class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none resize-none transition-shadow"></textarea>
+                    <div class="absolute bottom-3 right-3 flex space-x-2">
+                        <button id="send-btn" class="bg-primary hover:bg-green-600 text-white py-1.5 px-4 rounded-md transition-colors">
+                            <i class="fa fa-paper-plane mr-1"></i> 发送
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 设置面板模态框 -->
+    <div id="settings-modal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 hidden">
+        <div class="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 overflow-hidden">
+            <div class="flex justify-between items-center p-4 border-b border-gray-200">
+                <h3 class="text-lg font-semibold">设置</h3>
+                <button id="close-settings" class="text-gray-500 hover:text-gray-700">
+                    <i class="fa fa-times text-xl"></i>
+                </button>
+            </div>
+            <div class="p-4">
+                <div class="mb-4">
+                    <label for="api-key" class="block text-sm font-medium text-gray-700 mb-1">API Key</label>
+                    <input type="password" id="api-key" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none">
+                </div>
+                <div class="mb-4">
+                    <label for="base-url" class="block text-sm font-medium text-gray-700 mb-1">Base URL</label>
+                    <input type="text" id="base-url" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none">
+                </div>
+            </div>
+            <div class="p-4 border-t border-gray-200 flex justify-end">
+                <button id="save-settings" class="bg-primary hover:bg-green-600 text-white py-2 px-4 rounded-md transition-colors">
+                    保存设置
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 全局变量
+        let conversations = [];
+        // 当前对话ID
+        let currentConversationId = null;
+        // 是否显示思考内容
+        let showReasoning = false;
+        // 当前对话消息列表
+        let currentMessages = [];
+        // 是否正在发送消息
+        let isSending = false;
+
+        // 初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            // 加载配置
+            loadConfig();
+            // 加载历史对话并根据情况决定是否创建新对话
+            fetch('/get_history')
+                .then(response => response.json())
+                .then(conversations => {
+                    // 加载对话列表到界面
+                    const conversationList = document.getElementById('conversation-list');
+                    conversationList.innerHTML = '';
+                    
+                    conversations.forEach(conv => {
+                        const convItem = document.createElement('div');
+                        convItem.className = 'p-2 rounded-md hover:bg-gray-100 cursor-pointer transition-colors flex justify-between items-center';
+                        
+                        // 提取第一条消息作为标题
+                        const firstMessage = conv.messages && conv.messages.length > 0 ? conv.messages[0].content : '新对话';
+                        const title = firstMessage.length > 30 ? firstMessage.substring(0, 30) + '...' : firstMessage;
+                        
+                        convItem.innerHTML = `
+                            <div class="flex-1 truncate">${title}</div>
+                            <button class="delete-conv text-gray-400 hover:text-red-500 p-1 rounded-full" data-id="${conv.id}">
+                                <i class="fa fa-trash-o"></i>
+                            </button>
+                        `;
+                        
+                        convItem.addEventListener('click', function(e) {
+                            if (!e.target.closest('.delete-conv')) {
+                                loadConversation(conv.id);
+                            }
+                        });
+                        
+                        const deleteBtn = convItem.querySelector('.delete-conv');
+                        deleteBtn.addEventListener('click', function(e) {
+                            e.stopPropagation();
+                            deleteConversation(conv.id);
+                        });
+                        
+                        conversationList.appendChild(convItem);
+                    });
+                    
+                    // 当对话记录数量为0时，自动创建一个新对话
+                    if (conversations.length === 0) {
+                        createNewConversation();
+                    } else if (conversations.length > 0 && !currentConversationId) {
+                        // 如果有对话记录但当前没有选中对话，加载第一个对话
+                        loadConversation(conversations[0].id);
+                    }
+                })
+                .catch(error => {
+                    console.error('加载历史对话失败:', error);
+                    // 出错时创建一个新对话以确保用户可以使用
+                    createNewConversation();
+                });
+            
+            // 事件监听
+            document.getElementById('send-btn').addEventListener('click', sendMessage);
+            document.getElementById('message-input').addEventListener('keydown', function(e) {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    sendMessage();
+                }
+            });
+            
+            document.getElementById('new-chat-btn').addEventListener('click', createNewConversation);
+            
+            document.getElementById('settings-btn').addEventListener('click', openSettings);
+            document.getElementById('close-settings').addEventListener('click', closeSettings);
+            document.getElementById('save-settings').addEventListener('click', saveSettings);
+            document.getElementById('toggle-reasoning').addEventListener('click', toggleReasoning);
+            document.getElementById('toggle-sidebar').addEventListener('click', toggleSidebar);
+        });
+
+        // 切换侧边栏
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            sidebar.classList.toggle('hidden');
+        }
+
+        // 切换思考内容显示
+        function toggleReasoning() {
+            showReasoning = !showReasoning;
+            const btn = document.getElementById('toggle-reasoning');
+            if (showReasoning) {
+                btn.innerHTML = '<i class="fa fa-eye-slash mr-1"></i> 隐藏思考';
+                btn.classList.remove('bg-gray-200', 'hover:bg-gray-300');
+                btn.classList.add('bg-primary/10', 'hover:bg-primary/20', 'text-primary');
+            } else {
+                btn.innerHTML = '<i class="fa fa-lightbulb-o mr-1"></i> 显示思考';
+                btn.classList.add('bg-gray-200', 'hover:bg-gray-300');
+                btn.classList.remove('bg-primary/10', 'hover:bg-primary/20', 'text-primary');
+            }
+            
+            // 更新当前显示的思考内容
+            updateReasoningDisplay();
+        }
+
+        // 更新思考内容显示
+        function updateReasoningDisplay() {
+            const reasoningElements = document.querySelectorAll('.reasoning-message');
+            reasoningElements.forEach(el => {
+                el.style.display = showReasoning ? 'block' : 'none';
+            });
+        }
+
+        // 加载配置
+        function loadConfig() {
+            fetch('/get_config')
+                .then(response => response.json())
+                .then(config => {
+                    document.getElementById('api-key').value = config.api_key || '';
+                    document.getElementById('base-url').value = config.base_url || '';
+                })
+                .catch(error => console.error('加载配置失败:', error));
+        }
+
+        // 保存配置
+        function saveSettings() {
+            const apiKey = document.getElementById('api-key').value;
+            const baseUrl = document.getElementById('base-url').value;
+            
+            fetch('/save_config', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ api_key: apiKey, base_url: baseUrl })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    closeSettings();
+                    alert('设置已保存');
+                }
+            })
+            .catch(error => {
+                console.error('保存配置失败:', error);
+                alert('保存设置失败，请重试');
+            });
+        }
+
+        // 打开设置面板
+        function openSettings() {
+            document.getElementById('settings-modal').classList.remove('hidden');
+        }
+
+        // 关闭设置面板
+        function closeSettings() {
+            document.getElementById('settings-modal').classList.add('hidden');
+        }
+
+        // 加载历史对话
+        function loadConversations() {
+            fetch('/get_history')
+                .then(response => response.json())
+                .then(conversations => {
+                    const conversationList = document.getElementById('conversation-list');
+                    conversationList.innerHTML = '';
+                    
+                    conversations.forEach(conv => {
+                        const convItem = document.createElement('div');
+                        convItem.className = 'p-2 rounded-md hover:bg-gray-100 cursor-pointer transition-colors flex justify-between items-center';
+                        if (conv.id === currentConversationId) {
+                            convItem.classList.add('bg-gray-100', 'font-medium');
+                        }
+                        
+                        // 提取第一条消息作为标题
+                        const firstMessage = conv.messages && conv.messages.length > 0 ? conv.messages[0].content : '新对话';
+                        const title = firstMessage.length > 30 ? firstMessage.substring(0, 30) + '...' : firstMessage;
+                        
+                        convItem.innerHTML = `
+                            <div class="flex-1 truncate">${title}</div>
+                            <button class="delete-conv text-gray-400 hover:text-red-500 p-1 rounded-full" data-id="${conv.id}">
+                                <i class="fa fa-trash-o"></i>
+                            </button>
+                        `;
+                        
+                        convItem.addEventListener('click', function(e) {
+                            if (!e.target.closest('.delete-conv')) {
+                                loadConversation(conv.id);
+                            }
+                        });
+                        
+                        const deleteBtn = convItem.querySelector('.delete-conv');
+                        deleteBtn.addEventListener('click', function(e) {
+                            e.stopPropagation();
+                            deleteConversation(conv.id);
+                        });
+                        
+                        conversationList.appendChild(convItem);
+                    });
+                })
+                .catch(error => console.error('加载历史对话失败:', error));
+        }
+
+        // 创建新对话
+        function createNewConversation() {
+            currentConversationId = 'conv_' + Date.now();
+            currentMessages = [];
+            
+            // 清空聊天区域
+            const chatArea = document.getElementById('chat-area');
+            chatArea.innerHTML = `
+                <div class="max-w-3xl mx-auto space-y-6">
+                    <div class="bg-blue-50 p-4 rounded-lg">
+                        <p class="text-blue-800">欢迎使用对话助手！</p>
+                    </div>
+                </div>
+            `;
+            
+            // 保存空对话
+            saveConversation();
+            // 重新加载对话列表
+            loadConversations();
+        }
+
+        // 加载特定对话
+        function loadConversation(convId) {
+            fetch('/get_history')
+                .then(response => response.json())
+                .then(conversations => {
+                    const conversation = conversations.find(conv => conv.id === convId);
+                    if (conversation) {
+                        currentConversationId = convId;
+                        currentMessages = conversation.messages || [];
+                        
+                        // 渲染聊天记录
+                        renderChatHistory();
+                        
+                        // 重新加载对话列表
+                        loadConversations();
+                    }
+                })
+                .catch(error => console.error('加载对话失败:', error));
+        }
+
+        // 确保marked.js正确初始化
+        if (typeof marked === 'undefined') {
+            console.error('marked.js未加载，请检查CDN链接');
+        } else {
+            // 配置marked选项
+            marked.setOptions({
+                breaks: true,
+                gfm: true
+            });
+        }
+        
+        // 渲染聊天历史
+        function renderChatHistory() {
+            const chatArea = document.getElementById('chat-area');
+            chatArea.innerHTML = '<div class="max-w-3xl mx-auto space-y-6"></div>';
+            const chatContainer = chatArea.querySelector('div');
+            
+            currentMessages.forEach(msg => {
+                const messageDiv = document.createElement('div');
+                
+                if (msg.role === 'user') {
+                    messageDiv.className = 'flex justify-end';
+                    messageDiv.innerHTML = `
+                        <div class="bg-primary/10 p-4 rounded-lg rounded-tr-none max-w-[80%]">
+                            <p class="text-gray-800">${msg.content}</p>
+                        </div>
+                    `;
+                } else {
+                    messageDiv.className = 'flex';
+                    // 使用marked.js渲染Markdown内容，添加安全检查
+                    const markdownContent = typeof marked !== 'undefined' ? marked.parse(msg.content) : msg.content;
+                    
+                    messageDiv.innerHTML = `
+                        <div class="bg-white p-4 rounded-lg rounded-tl-none max-w-[80%] border border-gray-200">
+                            <div class="markdown-body text-gray-800" style="font-size: 1rem;">${markdownContent}</div>
+                            ${msg.reasoning ? `<div class="reasoning-message mt-2 p-2 bg-yellow-50 rounded text-sm text-gray-700" style="font-size: 0.875rem; display: ${showReasoning ? 'block' : 'none'}"><i class="fa fa-lightbulb-o mr-1 text-yellow-600"></i><span></span></div>` : ''}
+                        </div>
+                    `;
+                    
+                    // 如果有思考内容，直接设置文本内容而不经过markdown渲染
+                    if (msg.reasoning) {
+                        const reasoningElement = messageDiv.querySelector('.reasoning-message');
+                        const span = reasoningElement.querySelector('span');
+                        if (span) {
+                            span.textContent = msg.reasoning;
+                        }
+                    }
+                }
+                
+                chatContainer.appendChild(messageDiv);
+            });
+            
+            // 滚动到底部
+            chatArea.scrollTop = chatArea.scrollHeight;
+        }
+
+        // 保存对话
+        function saveConversation() {
+            fetch('/update_conversation', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    id: currentConversationId,
+                    messages: currentMessages,
+                    timestamp: new Date().toISOString()
+                })
+            })
+            .catch(error => console.error('保存对话失败:', error));
+        }
+
+        // 删除对话
+        function deleteConversation(convId) {
+            // 1. 立即弹出确认提示框，明确告知用户删除操作的后果
+            if (confirm('确定要删除这个对话吗？此操作不可恢复，所有消息内容将被永久删除。')) {
+                // 2. 仅当用户确认后，才执行实际的删除操作
+                fetch(`/delete_conversation/${convId}`, {
+                    method: 'DELETE'
+                })
+                .then(response => {
+                    // 检查响应状态
+                    if (!response.ok) {
+                        throw new Error('网络响应错误');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data && data.success) {
+                        // 3. 删除成功后，更新UI
+                        // 重新获取对话列表，检查是否还有对话
+                        return fetch('/get_history')
+                            .then(res => {
+                                if (!res.ok) {
+                                    throw new Error('获取对话历史失败');
+                                }
+                                return res.json();
+                            });
+                    } else {
+                        throw new Error('删除对话失败：服务器返回失败');
+                    }
+                })
+                .then(conversations => {
+                    // 刷新对话列表
+                    updateConversationList(conversations);
+                    
+                    // 如果删除的是当前对话
+                    if (convId === currentConversationId) {
+                        if (conversations.length === 0) {
+                            // 当对话记录数量为0时，自动创建一个新对话
+                            createNewConversation();
+                        } else {
+                            // 否则加载第一个对话
+                            loadConversation(conversations[0].id);
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error('删除对话失败:', error);
+                    alert('删除对话失败，请稍后重试。');
+                });
+            }
+            // 4. 如果用户点击"取消"按钮或关闭提示框，则自动终止删除流程，无需额外代码
+        }
+        
+        // 更新对话列表的辅助函数，避免重复代码
+        function updateConversationList(conversations) {
+            const conversationList = document.getElementById('conversation-list');
+            conversationList.innerHTML = '';
+            
+            conversations.forEach(conv => {
+                const convItem = document.createElement('div');
+                convItem.className = 'p-2 rounded-md hover:bg-gray-100 cursor-pointer transition-colors flex justify-between items-center';
+                if (conv.id === currentConversationId) {
+                    convItem.classList.add('bg-gray-100', 'font-medium');
+                }
+                
+                const firstMessage = conv.messages && conv.messages.length > 0 ? conv.messages[0].content : '新对话';
+                const title = firstMessage.length > 30 ? firstMessage.substring(0, 30) + '...' : firstMessage;
+                
+                convItem.innerHTML = `
+                    <div class="flex-1 truncate">${title}</div>
+                    <button class="delete-conv text-gray-400 hover:text-red-500 p-1 rounded-full" data-id="${conv.id}">
+                        <i class="fa fa-trash-o"></i>
+                    </button>
+                `;
+                
+                // 绑定对话项点击事件
+                convItem.addEventListener('click', function(e) {
+                    if (!e.target.closest('.delete-conv')) {
+                        loadConversation(conv.id);
+                    }
+                });
+                
+                // 绑定删除按钮点击事件
+                const deleteBtn = convItem.querySelector('.delete-conv');
+                deleteBtn.addEventListener('click', function(e) {
+                    e.stopPropagation(); // 阻止事件冒泡，防止同时触发对话项的点击事件
+                    deleteConversation(conv.id);
+                });
+                
+                conversationList.appendChild(convItem);
+            });
+        }
+
+        // 发送消息
+        function sendMessage() {
+            if (isSending) return;
+            
+            const inputElement = document.getElementById('message-input');
+            const message = inputElement.value.trim();
+            
+            if (!message) return;
+            
+            // 清空输入框
+            inputElement.value = '';
+            isSending = true;
+            document.getElementById('send-btn').disabled = true;
+            document.getElementById('send-btn').classList.add('opacity-50');
+            
+            // 添加用户消息到列表
+            const userMessage = { role: 'user', content: message };
+            currentMessages.push(userMessage);
+            
+            // 渲染用户消息
+            const chatArea = document.getElementById('chat-area');
+            const chatContainer = chatArea.querySelector('div.max-w-3xl') || chatArea;
+            
+            const userMessageDiv = document.createElement('div');
+            userMessageDiv.className = 'flex justify-end';
+            userMessageDiv.innerHTML = `
+                <div class="bg-primary/10 p-4 rounded-lg rounded-tr-none max-w-[80%]">
+                    <p class="text-gray-800">${message}</p>
+                </div>
+            `;
+            chatContainer.appendChild(userMessageDiv);
+            
+            // 为每条AI回复创建唯一的ID，防止多条消息时的ID冲突
+            const messageUniqueId = `msg_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+            
+            // 添加AI回复占位符
+            const aiMessageDiv = document.createElement('div');
+            aiMessageDiv.className = 'flex';
+            aiMessageDiv.dataset.messageId = messageUniqueId;
+            aiMessageDiv.innerHTML = `
+                <div class="bg-white p-4 rounded-lg rounded-tl-none max-w-[80%] border border-gray-200">
+                    <div class="markdown-body text-gray-800" style="font-size: 1rem;" id="ai-response-${messageUniqueId}"></div>
+                    <div class="reasoning-message mt-2 p-2 bg-yellow-50 rounded text-sm text-gray-700 markdown-body" style="font-size: 0.875rem; display: ${showReasoning ? 'block' : 'none'}" id="ai-reasoning-${messageUniqueId}">
+                        <i class="fa fa-lightbulb-o mr-1 text-yellow-600"></i>
+                        <span></span>
+                    </div>
+                </div>
+            `;
+            chatContainer.appendChild(aiMessageDiv);
+            
+            // 添加状态和中断按钮
+            const statusDiv = document.createElement('div');
+            statusDiv.id = `status-${messageUniqueId}`;
+            statusDiv.className = 'flex items-center text-gray-500 text-sm ml-4';
+            statusDiv.innerHTML = '<i class="fa fa-circle-o-notch fa-spin mr-2"></i>正在生成... <button class="ml-2 text-blue-600 hover:text-blue-800 font-medium stop-button">中断生成</button>';
+            chatContainer.appendChild(statusDiv);
+            
+            // 滚动到底部
+            chatArea.scrollTop = chatArea.scrollHeight;
+            
+            // 准备发送给API的消息
+            const messagesForAPI = currentMessages.map(msg => ({
+                role: msg.role,
+                content: msg.content
+            }));
+            
+            // 创建AbortController用于中断请求
+            const controller = new AbortController();
+            
+            // 添加中断按钮事件
+            const stopButton = statusDiv.querySelector('.stop-button');
+            stopButton.addEventListener('click', () => {
+                controller.abort();
+                statusDiv.innerHTML = '<span class="text-gray-500">已中断生成</span>';
+                isSending = false;
+                document.getElementById('send-btn').disabled = false;
+                document.getElementById('send-btn').classList.remove('opacity-50');
+            });
+            
+            // 保存初始的POST数据，添加signal以支持中断
+            fetch('/chat_stream', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    messages: messagesForAPI,
+                    show_reasoning: true // 总是请求思考内容，客户端控制显示/隐藏
+                }),
+                signal: controller.signal
+            }).then(response => {
+                if (response.ok) {
+                    const reader = response.body.getReader();
+                    const decoder = new TextDecoder();
+                    let aiResponse = '';
+                    let aiReasoning = '';
+                    
+                    function readChunk() {
+                        reader.read().then(({ done, value }) => {
+                            if (done) {
+                                // 完成接收
+                                const aiMessage = { 
+                                    role: 'assistant', 
+                                    content: aiResponse,
+                                    reasoning: aiReasoning
+                                };
+                                currentMessages.push(aiMessage);
+                                saveConversation();
+                                
+                                isSending = false;
+                                document.getElementById('send-btn').disabled = false;
+                                document.getElementById('send-btn').classList.remove('opacity-50');
+                                
+                                // 移除状态显示
+                                const statusDiv = document.getElementById(`status-${messageUniqueId}`);
+                                if (statusDiv) {
+                                    statusDiv.remove();
+                                }
+                                
+                                return;
+                            }
+                            
+                            const chunk = decoder.decode(value, { stream: true });
+                            const lines = chunk.split('\n');
+                            
+                            lines.forEach(line => {
+                                if (line.startsWith('data:')) {
+                                    try {
+                                        const data = JSON.parse(line.substring(5).trim());
+                                        
+                                        if (data.type === 'content') {
+                                            aiResponse += data.content;
+                                            const responseElement = document.getElementById(`ai-response-${messageUniqueId}`);
+                                            if (responseElement) {
+                                                // 使用marked.js渲染Markdown内容，添加安全检查
+                                                responseElement.innerHTML = typeof marked !== 'undefined' ? marked.parse(aiResponse) : aiResponse;
+                                            }
+                                        } else if (data.type === 'reasoning') {
+                                            // 总是收集思考内容
+                                            aiReasoning += data.content;
+                                            // 获取思考元素
+                                            const reasoningElement = document.getElementById(`ai-reasoning-${messageUniqueId}`);
+                                            if (reasoningElement) {
+                                                const span = reasoningElement.querySelector('span');
+                                                if (span) {
+                                                    // 移除可能存在的markdown渲染，直接使用原始内容
+                                                    // 先保存显示状态
+                                                    const currentDisplay = reasoningElement.style.display;
+                                                    // 使用原始内容而不是markdown渲染
+                                                    span.textContent = aiReasoning;
+                                                    // 确保显示状态保持一致
+                                                    reasoningElement.style.display = currentDisplay;
+                                                }
+                                                // 根据showReasoning状态控制显示
+                                                reasoningElement.style.display = showReasoning ? 'block' : 'none';
+                                            }
+                                        } else if (data.type === 'error') {
+                                            const responseElement = document.getElementById(`ai-response-${messageUniqueId}`);
+                                            if (responseElement) {
+                                                responseElement.innerHTML = typeof marked !== 'undefined' ? marked.parse('错误: ' + data.content) : ('错误: ' + data.content);
+                                            }
+                                            isSending = false;
+                                            document.getElementById('send-btn').disabled = false;
+                                            document.getElementById('send-btn').classList.remove('opacity-50');
+                                            
+                                            // 移除状态显示
+                                            const statusDiv = document.getElementById(`status-${messageUniqueId}`);
+                                            if (statusDiv) {
+                                                statusDiv.remove();
+                                            }
+                                        }
+                                        
+                                        // 滚动到底部
+                                        chatArea.scrollTop = chatArea.scrollHeight;
+                                    } catch (e) {
+                                        console.error('解析数据失败:', e);
+                                    }
+                                }
+                            });
+                            
+                            readChunk();
+                        });
+                    }
+                    
+                    readChunk();
+                } else {
+                    const responseElement = document.getElementById(`ai-response-${messageUniqueId}`);
+                    if (responseElement) {
+                        responseElement.innerHTML = typeof marked !== 'undefined' ? marked.parse('错误: 服务器响应失败') : '错误: 服务器响应失败';
+                    }
+                    isSending = false;
+                    document.getElementById('send-btn').disabled = false;
+                    document.getElementById('send-btn').classList.remove('opacity-50');
+                    
+                    // 移除状态显示
+                    const statusDiv = document.getElementById(`status-${messageUniqueId}`);
+                    if (statusDiv) {
+                        statusDiv.remove();
+                    }
+                }
+            }).catch(error => {
+                const responseElement = document.getElementById(`ai-response-${messageUniqueId}`);
+                if (responseElement) {
+                    // 如果是因为中止请求导致的错误，不显示错误信息
+                    if (error.name === 'AbortError') {
+                        responseElement.innerHTML = typeof marked !== 'undefined' ? marked.parse(aiResponse || '生成已中断') : (aiResponse || '生成已中断');
+                    } else {
+                        responseElement.innerHTML = typeof marked !== 'undefined' ? marked.parse('错误: ' + error.message) : ('错误: ' + error.message);
+                    }
+                }
+                isSending = false;
+                document.getElementById('send-btn').disabled = false;
+                document.getElementById('send-btn').classList.remove('opacity-50');
+                
+                // 移除状态显示
+                const statusDiv = document.getElementById(`status-${messageUniqueId}`);
+                if (statusDiv) {
+                    statusDiv.remove();
+                }
+            });
+        }
+    </script>
+</body>
+</html>
